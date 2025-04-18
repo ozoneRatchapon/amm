@@ -1,11 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{mint_to, transfer, Mint, MintTo, Token, TokenAccount, Transfer},
+    token::{burn, transfer, Burn, Mint, Token, TokenAccount, Transfer},
 };
 use constant_product_curve::ConstantProduct;
 
-use crate::{errors::AmmError, state::Config};
+use crate::{error::AmmError, state::Config};
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
@@ -15,7 +15,7 @@ pub struct Withdraw<'info> {
     pub mint_x: Account<'info, Mint>,
     pub mint_y: Account<'info, Mint>,
     #[account(
-        seeds = [b"lp".config.key.as_ref()],
+        seeds = [b"lp",config.key().as_ref()],
         bump = config.lp_bump,
         mint::decimals = 6,
         mint::authority = config,
@@ -59,7 +59,7 @@ pub struct Withdraw<'info> {
     #[account(
         has_one = mint_x,
         has_one = mint_y,
-        seeds = [b"config".seed.to_le_bytes().as_ref()],
+        seeds = [b"config",config.seed.to_le_bytes().as_ref()],
         bump = config.config_bump,
     )]
     pub config: Account<'info, Config>,
@@ -69,7 +69,7 @@ pub struct Withdraw<'info> {
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> Withdraw<'info> {
+impl Withdraw<'_> {
     pub fn withdraw(
         &mut self,
         lp_amount: u64, // amount of LP tokens to burn
@@ -94,14 +94,11 @@ impl<'info> Withdraw<'info> {
             }
         };
 
-        require!(x >= min_x && y >= min_y, AmmError::SomeError);
+        require!(x >= min_x && y >= min_y, AmmError::InsufficientBalance);
 
         self.withdraw_token(true, x)?;
         self.withdraw_token(false, y)?;
-
-        self.burn_lp_tokens(lp_amount)?;
-
-        Ok(())
+        self.burn_lp_tokens(lp_amount)
     }
 
     fn withdraw_token(&mut self, is_x: bool, amount: u64) -> Result<()> {
@@ -130,20 +127,17 @@ impl<'info> Withdraw<'info> {
         ];
         let signer_seeds = &[&seeds[..]];
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_account, signer_seeds);
-        transfer(cpi_ctx, amount)?;
-        Ok(())
+        transfer(cpi_ctx, amount)
     }
 
     pub fn burn_lp_tokens(&mut self, amount: u64) -> Result<()> {
         let cpi_program = self.token_program.to_account_info();
         let cpi_account = Burn {
             mint: self.mint_lp.to_account_info(),
-            to: self.user_lp.to_account_info(),
+            from: self.user_lp.to_account_info(),
             authority: self.user.to_account_info(),
         };
         let cpi_ctx = CpiContext::new(cpi_program, cpi_account);
-        burn(cpi_ctx, amount)?;
-
-        Ok(())
+        burn(cpi_ctx, amount)
     }
 }

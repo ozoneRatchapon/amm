@@ -71,7 +71,7 @@ pub struct Deposit<'info> {
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> Deposit<'info> {
+impl Deposit<'_> {
     pub fn deposit(
         &mut self,
         amount: u64, // amount of LP tokens that the user wants to claim
@@ -80,7 +80,7 @@ impl<'info> Deposit<'info> {
     ) -> Result<()> {
         // LP = TRUMP and MELANIA coins as deposited
 
-        require!(self.config.locked == false, AmmError::PoolLocked);
+        require!(!self.config.locked, AmmError::PoolLocked);
         require!(amount != 0, AmmError::InvalidAmount);
 
         let (x, y) = match self.mint_lp.supply == 0

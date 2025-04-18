@@ -54,7 +54,7 @@ pub struct Initialize<'info> {
     pub system_program: Program<'info, System>,
 }
 
-impl<'info> Initialize<'info> {
+impl Initialize<'_> {
     pub fn initialize(
         &mut self,
         seed: u64,

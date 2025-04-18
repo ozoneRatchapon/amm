@@ -5,7 +5,7 @@ use anchor_spl::{
 };
 use constant_product_curve::{ConstantProduct, LiquidityPair};
 
-use crate::{errors::AmmError, state::Config};
+use crate::{error::AmmError, state::Config};
 
 #[derive(Accounts)]
 pub struct Swap<'info> {
@@ -14,7 +14,7 @@ pub struct Swap<'info> {
     pub mint_x: Account<'info, Mint>,
     pub mint_y: Account<'info, Mint>,
     #[account(
-        seeds = [b"lp".config.key.as_ref()],
+        seeds = [b"lp",config.key().as_ref()],
         bump = config.lp_bump,
         mint::decimals = 6,
         mint::authority = config,
@@ -61,9 +61,9 @@ pub struct Swap<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
-impl<'info> Swap<'info> {
+impl Swap<'_> {
     pub fn swap(&mut self, is_x: bool, amount_in: u64, min_amount_out: u64) -> Result<()> {
-        require!(self.config.locked == false, AmmError::PoolLocked);
+        require!(!self.config.locked, AmmError::PoolLocked);
         require!(amount_in > 0, AmmError::InvalidAmount);
 
         let mut curve = ConstantProduct::init(
@@ -91,8 +91,6 @@ impl<'info> Swap<'info> {
         self.deposit_token(is_x, res.deposit)?;
         // withdraw tokens
         self.withdraw_token(is_x, res.withdraw)?;
-        // transfer fee
-
         Ok(())
     }
 
@@ -115,9 +113,7 @@ impl<'info> Swap<'info> {
             authority: self.user.to_account_info(),
         };
         let cpi_ctx = CpiContext::new(cpi_program, cpi_account);
-        transfer(cpi_ctx, amount)?;
-
-        Ok(())
+        transfer(cpi_ctx, amount)
     }
 
     pub fn withdraw_token(&mut self, is_x: bool, amount: u64) -> Result<()> {
@@ -147,8 +143,6 @@ impl<'info> Swap<'info> {
         let signer_seeds = &[&seeds[..]];
 
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_account, signer_seeds);
-        transfer(cpi_ctx, amount)?;
-
-        Ok(())
+        transfer(cpi_ctx, amount)
     }
 }
